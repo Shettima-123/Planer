@@ -1,0 +1,97 @@
+<!DOCTYPE html><html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login</title>
+  <style>
+    * { box-sizing: border-box; font-family: Arial, sans-serif; }
+    body {
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background: linear-gradient(135deg, #1e293b, #2563eb);
+    }.card {
+  background: white;
+  padding: 30px;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 350px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+}
+
+h2 { text-align: center; margin-bottom: 20px; }
+
+input {
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 15px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+button {
+  width: 100%;
+  padding: 12px;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+button:hover { background: #1d4ed8; }
+
+.error { color: red; text-align: center; margin-top: 10px; }
+
+  </style>
+</head>
+<body><div class="card">
+  <h2>Login</h2>
+  <input type="email" id="email" placeholder="Email">
+  <input type="password" id="password" placeholder="Password">
+  <button onclick="login(this)">Sign In</button>
+  <div class="error" id="error"></div>
+</div><script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDRqjyf_6yTp983uV4girXqUC0A3iRBYbU",
+    authDomain: "mainafly-3c92b.firebaseapp.com",
+    projectId: "mainafly-3c92b",
+    storageBucket: "mainafly-3c92b.firebasestorage.app",
+    messagingSenderId: "884768902458",
+    appId: "1:884768902458:web:1c74c398df64d9282f9403",
+    measurementId: "G-ZRVHWMBZZM"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+
+  window.login = async function (btn) {
+    btn.innerHTML = "Login...";
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
+    const errorDiv = document.getElementById('error');
+
+    errorDiv.textContent = '';
+
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+     // alert('Login successful: ' + user.email);
+
+      // redirect example
+      btn.innerHTML = "Login";
+      window.location.href = "index.html";
+
+    } catch (error) {
+      btn.innerHTML = "Login";
+      errorDiv.textContent = "Error"; // error.message;
+    }
+  };
+</script></body>
+</html>
