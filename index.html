@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>To-Do App</title>
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, sans-serif; }
+
+body {
+  background: #f4f6f9;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+header {
+  background: #1e293b;
+  color: white;
+  padding: 15px 20px;
+  display: flex;
+  justify-content: space-between;
+}
+
+header button {
+  background: #ef4444;
+  border: none;
+  color: white;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.container { padding: 20px; flex: 1; }
+
+.controls {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.controls input, .controls select {
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+.btn {
+  border: none;
+  padding: 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: white;
+}
+
+.add-btn { background: #16a34a; }
+.save-btn { background: #2563eb; }
+.filter-btn { background: #9333ea; }
+.clear-btn { background: #64748b; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+}
+
+th, td { padding: 12px; text-align: left; }
+th { background: #e2e8f0; }
+
+tr:not(:last-child) { border-bottom: 1px solid #eee; }
+
+.done { background: #d1fae5; }
+.pending { background: #fef3c7; }
+.overdue { background: #fee2e2; }
+
+.action-btn {
+  background: #ef4444;
+  color: white;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+@media(max-width: 768px) {
+  .controls { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <div id="email"></div>
+  <button onclick="logout()">Logout</button>
+</header>
+
+<div class="container">
+
+<div class="controls">
+  <input type="text" id="taskInput" placeholder="Task">
+  <input type="datetime-local" id="dateInput">
+  <select id="statusInput">
+    <option value="undone">Undone</option>
+    <option value="done">Done</option>
+  </select>
+  <input type="text" id="executorInput" placeholder="Executor">
+
+  <!-- ✅ Month Picker -->
+  <input type="month" id="monthPicker">
+
+  <button class="btn add-btn" onclick="addTask()">New</button>
+  <button class="btn save-btn" onclick="saveTasks()">Save</button>
+  <button class="btn filter-btn" onclick="filterByMonth()">Filter</button>
+  <button class="btn clear-btn" onclick="clearFilter()">Clear</button>
+</div>
+
+<table>
+<thead>
+<tr>
+  <th>Task</th>
+  <th>Dateline</th>
+  <th>Status</th>
+  <th>Executor</th>
+  <th>Action</th>
+</tr>
+</thead>
+<tbody id="taskTable"></tbody>
+</table>
+
+</div>
+
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
+import { 
+  getAuth, onAuthStateChanged, signOut
+} from "https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js";
+
+import { 
+  getFirestore, collection, getDocs, query, where,
+  addDoc, doc, updateDoc, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDRqjyf_6yTp983uV4girXqUC0A3iRBYbU",
+    authDomain: "mainafly-3c92b.firebaseapp.com",
+    projectId: "mainafly-3c92b",
+    storageBucket: "mainafly-3c92b.firebasestorage.app",
+    messagingSenderId: "884768902458",
+    appId: "1:884768902458:web:1c74c398df64d9282f9403",
+    measurementId: "G-ZRVHWMBZZM"
+  };
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+let tasks = [];
+let filteredTasks = null;
+let currentUser = null;
+let currentDocId = null;
+
+onAuthStateChanged(auth, user => {
+  if (!user) {
+    window.location.href = "login.html";
+    return;
+  }
+
+  currentUser = user;
+  email.innerText = user.email;
+});
+
+
+// ✅ LOAD TASKS BY MONTH
+window.filterByMonth = async function() {
+  const value = monthPicker.value;
+
+  if (!value) {
+    alert("Select month");
+    return;
+  }
+
+  const [year, month] = value.split("-");
+
+  const q = query(
+    collection(db, "tasks"),
+    where("month", "==", Number(month)),
+    where("year", "==", Number(year))
+  );
+
+  const snap = await getDocs(q);
+
+  tasks = [];
+  currentDocId = null;
+
+  if (!snap.empty) {
+    const docSnap = snap.docs[0];
+    const data = docSnap.data();
+
+    tasks = data.tasks || [];
+    currentDocId = docSnap.id;
+  }
+
+  renderTasks();
+}
+
+
+// ✅ ADD TASK
+window.addTask = function() {
+  const task = taskInput.value;
+  const date = dateInput.value;
+  const status = statusInput.value;
+  const executor = executorInput.value;
+
+  if (!task || !date || !executor) {
+    alert("Fill all fields");
+    return;
+  }
+
+  tasks.push({
+    task,
+    date,
+    status,
+    executor,
+    updatedBy: currentUser.email,
+    updatedAt: new Date()
+  });
+
+  renderTasks();
+
+  taskInput.value = '';
+  dateInput.value = '';
+  executorInput.value = '';
+}
+
+
+// ✅ RENDER
+function renderTasks(list = null) {
+  const table = taskTable;
+  table.innerHTML = "";
+
+  const data = list || tasks;
+  const now = new Date();
+
+  data.forEach((t, i) => {
+    const index = t.originalIndex ?? i;
+    const taskDate = new Date(t.date);
+
+    let cls = t.status === 'done'
+      ? 'done'
+      : (taskDate < now ? 'overdue' : 'pending');
+
+    table.innerHTML += `
+      <tr class="${cls}">
+        <td>${t.task}</td>
+        <td>${new Date(t.date).toLocaleString()}</td>
+        <td>
+          <select onchange="updateStatus(${index}, this.value)">
+            <option value="undone" ${t.status==='undone'?'selected':''}>Undone</option>
+            <option value="done" ${t.status==='done'?'selected':''}>Done</option>
+          </select>
+        </td>
+        <td>${t.executor}</td>
+        <td><button onclick="deleteTask(${index})">Delete</button></td>
+      </tr>
+    `;
+  });
+}
+
+
+// ✅ UPDATE STATUS
+window.updateStatus = function(index, value) {
+  tasks[index].status = value;
+  tasks[index].updatedBy = currentUser.email;
+  tasks[index].updatedAt = new Date();
+
+  renderTasks(filteredTasks);
+}
+
+
+// ✅ DELETE
+window.deleteTask = function(index) {
+  tasks.splice(index, 1);
+  renderTasks(filteredTasks);
+}
+
+
+// ✅ SAVE TO FIRESTORE
+window.saveTasks = async function() {
+
+  const value = monthPicker.value;
+
+  if (!value) {
+    alert("Select month before saving");
+    return;
+  }
+
+  const [year, month] = value.split("-");
+
+  const payload = {
+    month: Number(month),
+    year: Number(year),
+    tasks: tasks.map(t => ({
+      ...t
+     // updatedAt: serverTimestamp()
+    })),
+    updatedBy: currentUser.email,
+    updatedAt: serverTimestamp()
+  };
+
+  try {
+
+    if (currentDocId) {
+      // 🔄 Update existing document
+      const ref = doc(db, "tasks", currentDocId);
+      await updateDoc(ref, payload);
+      alert("Updated successfully");
+
+    } else {
+      // 🆕 Create new document
+      await addDoc(collection(db, "tasks"), payload);
+      alert("Created new month plan");
+    }
+
+  } catch (err) {
+    console.error(err);
+    alert("Error saving data");
+  }
+}
+
+
+// ✅ CLEAR FILTER
+window.clearFilter = function() {
+  tasks = [];
+  currentDocId = null;
+  renderTasks();
+}
+
+
+// ✅ LOGOUT
+window.logout = function() {
+  signOut(auth);
+  //alert("Logout not implemented yet");
+}
+
+</script>
+
+</body>
+</html>
